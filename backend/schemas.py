@@ -7,6 +7,7 @@ class ProductBase(BaseModel):
     name: str
     barcode: str
     quantity: int
+    price: float
 
 class ProductCreate(ProductBase):
     pass

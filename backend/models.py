@@ -9,6 +9,7 @@ class Product(Base):
     name = Column(String, unique=True, index=True)
     barcode = Column(String, unique=True, index=True)
     quantity = Column(Integer)
+    price = Column(Float)
 
 class User(Base):
     __tablename__ = "users"

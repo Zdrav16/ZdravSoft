@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QPushButton, QListWidget,
-    QLabel, QLineEdit, QMessageBox, QHBoxLayout, QGridLayout, QListWidgetItem
+    QLabel, QLineEdit, QMessageBox, QHBoxLayout, QGridLayout, QListWidgetItem, QInputDialog
 )
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt
 import api
 
 class MainWindow(QMainWindow):
@@ -11,20 +11,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("ZdravSoft - Продажби")
         self.setGeometry(100, 100, 800, 600)
 
-        # Зареждаме стиловете
-        with open("styles.qss", "r") as f:
-            self.setStyleSheet(f.read())
-
         # Основен widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
         layout = QVBoxLayout()
-
-        # Бутон за добавяне на стока (отваря диалог)
-        add_stock_btn = QPushButton("Добави нова стока")
-        add_stock_btn.clicked.connect(self.add_product_dialog)
-        layout.addWidget(add_stock_btn)
 
         # Поле за търсене
         search_layout = QHBoxLayout()
@@ -36,20 +27,44 @@ class MainWindow(QMainWindow):
         search_layout.addWidget(search_btn)
         layout.addLayout(search_layout)
 
-        # Бързи бутони (примерно 9)
-        quick_buttons_layout = QGridLayout()
+        # Бързи бутони
+        quick_layout = QGridLayout()
         self.quick_buttons = []
         for i in range(9):
-            btn = QPushButton(f"Бутон {i+1}")
+            btn = QPushButton(f"Бърз бутон {i+1}")
             btn.clicked.connect(lambda _, idx=i: self.add_quick_product(idx))
             self.quick_buttons.append(btn)
-            quick_buttons_layout.addWidget(btn, i // 3, i % 3)
-        layout.addLayout(quick_buttons_layout)
+            quick_layout.addWidget(btn, i // 3, i % 3)
+        layout.addLayout(quick_layout)
 
-        # „Касова бележка“ – списък с добавени продукти
+        # Списък с продукти
+        layout.addWidget(QLabel("Налични продукти:"))
+        self.product_list = QListWidget()
+        layout.addWidget(self.product_list)
+
+        # Поле за количество
+        qty_layout = QHBoxLayout()
+        qty_layout.addWidget(QLabel("Количество:"))
+        self.qty_input = QLineEdit()
+        qty_layout.addWidget(self.qty_input)
+        layout.addLayout(qty_layout)
+
+        # Касов бон
         layout.addWidget(QLabel("Текуща продажба:"))
         self.receipt_list = QListWidget()
+        self.receipt_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.receipt_list.customContextMenuRequested.connect(self.remove_product)
         layout.addWidget(self.receipt_list)
+
+        # Бутон за зареждане на продукти
+        load_btn = QPushButton("Зареди продукти")
+        load_btn.clicked.connect(self.load_products)
+        layout.addWidget(load_btn)
+
+        # Бутон за добавяне на нова стока
+        add_product_btn = QPushButton("Добави нов продукт")
+        add_product_btn.clicked.connect(self.add_product_dialog)
+        layout.addWidget(add_product_btn)
 
         # Бутон за завършване
         finish_btn = QPushButton("Завърши продажба")
@@ -58,40 +73,33 @@ class MainWindow(QMainWindow):
 
         central_widget.setLayout(layout)
 
-        # Данни за текущата продажба
         self.sale_items = []
 
-    def add_product_dialog(self):
-        # Тук ще отворим нов прозорец за въвеждане на нова стока (по-късно)
-        pass
-
-    def search_product(self):
-        # Логика за търсене по име, баркод или ID
-        term = self.search_input.text()
+    def load_products(self):
+        self.product_list.clear()
         products = api.get_products()
         for p in products:
-            if term in str(p['id']) or term in p['name'] or term in p['barcode']:
-                self.add_product_to_receipt(p['id'], p['name'], 1, 1.0)
+            self.product_list.addItem(f"{p['id']} - {p['name']} (наличност: {p['quantity']})")
+
+    def search_product(self):
+        term = self.search_input.text().lower()
+        products = api.get_products()
+        self.product_list.clear()
+        for p in products:
+            if term in str(p['id']) or term in p['name'].lower() or term in p['barcode']:
+                self.product_list.addItem(f"{p['id']} - {p['name']} (наличност: {p['quantity']})")
 
     def add_quick_product(self, idx):
-        # Пример: всеки бутон е свързан с фиксиран продукт
-        # Тук можеш да настроиш какво да добавя
         products = api.get_products()
         if idx < len(products):
             p = products[idx]
-            self.add_product_to_receipt(p['id'], p['name'], 1, 1.0)
+            self.add_product_to_receipt(p['id'], p['name'], 1, 1.0)  # фиксирана цена за тест
 
     def add_product_to_receipt(self, product_id, name, qty, price):
         item_text = f"{name} x{qty} - {price*qty} лв."
         item = QListWidgetItem(item_text)
-        item.setData(1000, {"product_id": product_id, "quantity": qty, "price": price})
+        item.setData(Qt.UserRole, {"product_id": product_id, "quantity": qty, "price": price})
         self.receipt_list.addItem(item)
-
-        # Десен бутон за изтриване
-        item.setFlags(item.flags() | Qt.ItemIsSelectable)
-        item.setToolTip("Десен клик за изтриване")
-        self.receipt_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.receipt_list.customContextMenuRequested.connect(self.remove_product)
 
     def remove_product(self, pos):
         item = self.receipt_list.itemAt(pos)
@@ -106,7 +114,7 @@ class MainWindow(QMainWindow):
         items = []
         total = 0
         for i in range(self.receipt_list.count()):
-            data = self.receipt_list.item(i).data(1000)
+            data = self.receipt_list.item(i).data(Qt.UserRole)
             items.append(data)
             total += data["quantity"] * data["price"]
 
@@ -114,3 +122,19 @@ class MainWindow(QMainWindow):
         response = api.create_sale(sale_data)
         QMessageBox.information(self, "Успех", f"Продажбата е записана (ID: {response['id']})")
         self.receipt_list.clear()
+
+    def add_product_dialog(self):
+        name, ok1 = QInputDialog.getText(self, "Име на продукта", "Въведи име:")
+        if not ok1 or not name:
+            return
+        barcode, ok2 = QInputDialog.getText(self, "Баркод", "Въведи баркод:")
+        if not ok2 or not barcode:
+            return
+        qty, ok3 = QInputDialog.getInt(self, "Количество", "Въведи количество:", 1, 1, 1000, 1)
+        if not ok3:
+            return
+
+        product_data = {"name": name, "barcode": barcode, "quantity": qty}
+        response = api.add_product(product_data)
+        QMessageBox.information(self, "Добавено", f"Продуктът е добавен:\n{response}")
+        self.load_products()
