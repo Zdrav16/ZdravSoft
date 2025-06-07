@@ -2,6 +2,20 @@ from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from typing import List
 
+
+class ProductBase(BaseModel):
+    name: str
+    barcode: str
+    quantity: int
+
+class ProductCreate(ProductBase):
+    pass
+
+class Product(ProductBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SaleItemBase(BaseModel):
     product_id: int
     quantity: int
