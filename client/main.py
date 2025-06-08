@@ -149,6 +149,23 @@ class MainWindow(QMainWindow):
         if self.receipt_list.count() == 0:
             QMessageBox.warning(self, "Грешка", "Няма продукти!")
             return
+
+        # Проверка за наличности
+        products = {p["id"]: p for p in api.get_products()}
+        for i in range(self.receipt_list.count()):
+            data = self.receipt_list.item(i).data(Qt.UserRole)
+            product = products.get(data["product_id"])
+            if not product:
+                QMessageBox.warning(self, "Грешка", f"Продукт с ID {data['product_id']} не е намерен!")
+                return
+            if data["quantity"] > product["quantity"]:
+                QMessageBox.warning(
+                    self, "Недостатъчни наличности!",
+                    f"Недостатъчно количество за {product['name']} (наличност: {product['quantity']})"
+                )
+                return
+
+        # Ако всичко е наред → завършваме
         items = []
         total = 0
         for i in range(self.receipt_list.count()):
